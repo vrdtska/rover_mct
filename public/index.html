@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>NASA Open MCT - Rover Lunar</title>
+    <script src="/node_modules/openmct/dist/openmct.js"></script>
+</head>
+<body style="margin: 0; height: 100vh;">
+    <div id="element-container" style="width: 100%; height: 100%;"></div>
+    <script>
+        openmct.setAssetPath('/node_modules/openmct/dist');
+        openmct.install(openmct.plugins.DarkmatterTheme());
+        openmct.install(openmct.plugins.LocalStorage());
+        openmct.install(openmct.plugins.MyItems());
+        openmct.install(openmct.plugins.UTCTimeSystem());
+        openmct.time.setClock('local');
+        openmct.time.setClockOffsets({start: -15 * 60 * 1000, end: 0});
+        openmct.time.setTimeSystem('utc');
+
+        const socket = new WebSocket('ws://' + location.host);
+        const listeners = {};
+
+        socket.onmessage = function (event) {
+            const packet = JSON.parse(event.data);
+            if (listeners[packet.id]) {
+                listeners[packet.id]({
+                    id: packet.id,
+                    timestamp: packet.timestamp,
+                    value: packet.value
+                });
+            }
+        };
+
+        openmct.telemetry.addProvider({
+            supportsSubscribe: function (domainObject) {
+                return domainObject.type === 'telemetry';
+            },
+            supportsRequest: function (domainObject) {
+                return domainObject.type === 'telemetry';
+            },
+
+            subscribe: function (domainObject, callback) {
+                listeners[domainObject.identifier.key] = callback;
+                return function unsubscribe() {
+                    delete listeners[domainObject.identifier.key];
+                };
+            },
+
+            request: function (domainObject, options) {
+                return Promise.resolve([]);
+            }
+        });
+
+        // Cargar el diccionario JSON con datos de telemetría
+        fetch('/dictionary.json')
+            .then(res => res.json())
+            .then(dictionary => {
+
+                // 1. Proveedor de Objetos (Mapea las llaves a objetos de Open MCT)
+                openmct.objects.addProvider('rover.spacecraft', {
+                    get: async function (identifier) {
+                        if (identifier.key === 'rover') {
+                            return {
+                                identifier: identifier,
+                                name: dictionary.name,
+                                type: 'folder',
+                                location: 'ROOT'
+                            };
+                        }
+                        
+                        const measurement = dictionary.measurements.find(m => m.key === identifier.key);
+                        if (!measurement){
+                            return {
+                                identifier: identifier,
+                                name: identifier.key, 
+                                type: 'unknown'
+                            };
+                        }
+
+                        return {
+                            identifier: identifier,
+                            name: measurement.name,
+                            type: 'telemetry',
+                            telemetry: {
+                                values: [
+                                    { 
+                                        key: 'value', 
+                                        name: 'Valor', 
+                                        units: measurement.units, 
+                                        format: 'float', 
+                                        hints: { range: 1 } 
+                                    },
+                                    { 
+                                        key: 'utc', 
+                                        name: 'Tiempo', 
+                                        format: 'utc', 
+                                        hints: { domain: 1 } 
+                                    }
+                                ]
+                            },
+                            location: 'rover.spacecraft:rover'
+                        };
+                    }
+                });
+
+                openmct.composition.addProvider({
+                    appliesTo: function (domainObject) {
+                        return domainObject.identifier.namespace === 'rover.spacecraft' && domainObject.identifier.key === 'rover';
+                    },
+                    load: async function (domainObject) {
+                        // Mapea cada medición del diccionario como un hijo de la carpeta raíz
+                        return dictionary.measurements.map(m => {
+                            return {
+                                namespace: 'rover.spacecraft',
+                                key: m.key
+                            };
+                        });
+                    }
+                });
+
+                // 3. Definir el Nodo Raíz e Iniciar
+                openmct.objects.addRoot({
+                    namespace: 'rover.spacecraft',
+                    key: 'rover'
+                });
+                
+                openmct.start(document.getElementById('element-container'));
+            })
+            .catch(err => console.error("Error cargando el diccionario de telemetría:", err));
+    </script>
+</body>
+</html>
