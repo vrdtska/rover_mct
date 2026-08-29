@@ -7,13 +7,6 @@ const path = require('path');
 const app = express();
 const PORT = 8080;
 
-// 🛑 Fix: Disable or override strict framing restrictions causing the 403 error
-app.use((req, res, next) => {
-    res.removeHeader('X-Frame-Options');
-    res.setHeader('Content-Security-Policy', "default-src * 'unsafe-inline' 'unsafe-eval' data: blob: ws: wss:");
-    next();
-});
-
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
