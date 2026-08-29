@@ -24,7 +24,7 @@
             if (listeners[packet.id]) {
                 listeners[packet.id]({
                     id: packet.id,
-                    timestamp: packet.timestamp,
+                    utc: packet.utc, // Fixed: was packet.timestamp
                     value: packet.value
                 });
             }
