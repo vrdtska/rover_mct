@@ -1,6 +1,6 @@
 const express = require('express');
 const mqtt = require('mqtt');
-const { WebSocketServer } = require('ws');
+const { WebSocket, WebSocketServer } = require('ws');
 const path = require('path');
 
 const app = express();
@@ -13,13 +13,12 @@ app.get('/dictionary.json', (req, res) => {
     res.sendFile(path.join(__dirname, 'dictionary.json'));
 });
 
-const server = app.listen(PORT, () => {
-    console.log(`Open MCT Mission Control en http://localhost:${PORT}`);
+// 1. Explicitly listen on 0.0.0.0 for external network access
+const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`📡 Open MCT Mission Control listening on port ${PORT}`);
 });
 
-const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-const ws = new WebSocket(`${wsProtocol}//${window.location.host}`);
-
+const wss = new WebSocketServer({ server });
 let connectedClients = [];
 
 wss.on('connection', (ws) => {
@@ -29,10 +28,10 @@ wss.on('connection', (ws) => {
     });
 });
 
-const mqttClient = mqtt.connect('mqtt://localhost:1883');
+const mqttClient = mqtt.connect('mqtt://127.0.0.1:1883');
 
 mqttClient.on('connect', () => {
-    console.log('Conectado al Broker Mosquitto local.');
+    console.log('✅ Conectado al Broker MQTT local.');
     mqttClient.subscribe('rover/odometry');
     mqttClient.subscribe('rover/sensors');
     mqttClient.subscribe('rover/telemetry');
@@ -59,7 +58,6 @@ mqttClient.on('message', (topic, message) => {
             const state = payload.rover_state;
             telemetryData['peso'] = state.peso || 0.0;
             
-            // Extracción del estado de motores del arreglo estructurado de tu Jetson
             if (state.left_side && state.left_side.motors) {
                 telemetryData['rpm_m_izq1'] = state.left_side.motors[0]?.rpm || 0.0;
                 telemetryData['rpm_m_izq2'] = state.left_side.motors[1]?.rpm || 0.0;
@@ -76,9 +74,16 @@ mqttClient.on('message', (topic, message) => {
                 value: telemetryData[key],
                 utc: timestamp 
             };
-            connectedClients.forEach(client => client.send(JSON.stringify(mctPacket)));
+            const packetStr = JSON.stringify(mctPacket);
+
+            // 2. Only send to clients that are actively open
+            connectedClients.forEach(client => {
+                if (client.readyState === WebSocket.OPEN) {
+                    client.send(packetStr);
+                }
+            });
         });
     } catch (err) {
-        // Ignora hilos vacíos o estados raw "online/offline"
+        // Ignores non-JSON or malformed packets
     }
 });
