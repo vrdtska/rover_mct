@@ -9,12 +9,12 @@ const PORT = 8080;
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/node_modules', express.static(path.join(__dirname, 'node_modules')));
 
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
 app.get('/dictionary.json', (req, res) => {
     res.sendFile(path.join(__dirname, 'dictionary.json'));
+});
+
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // 1. Explicitly listen on 0.0.0.0 for external network access
