@@ -22,7 +22,8 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`📡 Open MCT Mission Control listening on port ${PORT}`);
 });
 
-const wss = new WebSocketServer({ server });
+const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const ws = new WebSocket(`${wsProtocol}//${window.location.host}`);
 let connectedClients = [];
 
 wss.on('connection', (ws) => {
