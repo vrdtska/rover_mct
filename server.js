@@ -7,10 +7,14 @@ const path = require('path');
 const app = express();
 const PORT = 8080;
 
-// 1. Create a unified HTTP server instance
-const server = http.createServer(app);
+// 🛑 Fix: Disable or override strict framing restrictions causing the 403 error
+app.use((req, res, next) => {
+    res.removeHeader('X-Frame-Options');
+    res.setHeader('Content-Security-Policy', "default-src * 'unsafe-inline' 'unsafe-eval' data: blob: ws: wss:");
+    next();
+});
 
-// 2. Bind WebSocket server to the unified HTTP server
+const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -92,7 +96,6 @@ mqttClient.on('message', (topic, message) => {
     }
 });
 
-// 3. Listen on the unified server instance bound to 0.0.0.0
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`📡 Open MCT Mission Control listening on port ${PORT}`);
 });
