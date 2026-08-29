@@ -17,13 +17,12 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// 1. Explicitly listen on 0.0.0.0 for external network access
+// Explicitly listen on 0.0.0.0 for external network access
 const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`📡 Open MCT Mission Control listening on port ${PORT}`);
 });
 
-const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-const ws = new WebSocket(`${wsProtocol}//${window.location.host}`);
+const wss = new WebSocketServer({ server });
 let connectedClients = [];
 
 wss.on('connection', (ws) => {
@@ -81,7 +80,6 @@ mqttClient.on('message', (topic, message) => {
             };
             const packetStr = JSON.stringify(mctPacket);
 
-            // 2. Only send to clients that are actively open
             connectedClients.forEach(client => {
                 if (client.readyState === WebSocket.OPEN) {
                     client.send(packetStr);
@@ -89,6 +87,6 @@ mqttClient.on('message', (topic, message) => {
             });
         });
     } catch (err) {
-        // Ignores non-JSON or malformed packets
+        // Ignores malformed packets
     }
 });
