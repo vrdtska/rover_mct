@@ -1,10 +1,17 @@
 const express = require('express');
+const http = require('http');
 const mqtt = require('mqtt');
-const { WebSocket, WebSocketServer } = require('ws');
+const { WebSocketServer } = require('ws');
 const path = require('path');
 
 const app = express();
 const PORT = 8080;
+
+// 1. Create a unified HTTP server instance
+const server = http.createServer(app);
+
+// 2. Bind WebSocket server to the unified HTTP server
+const wss = new WebSocketServer({ server });
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/node_modules', express.static(path.join(__dirname, 'node_modules')));
@@ -17,12 +24,6 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Explicitly listen on 0.0.0.0 for external network access
-const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`📡 Open MCT Mission Control listening on port ${PORT}`);
-});
-
-const wss = new WebSocketServer({ server });
 let connectedClients = [];
 
 wss.on('connection', (ws) => {
@@ -89,4 +90,9 @@ mqttClient.on('message', (topic, message) => {
     } catch (err) {
         // Ignores malformed packets
     }
+});
+
+// 3. Listen on the unified server instance bound to 0.0.0.0
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`📡 Open MCT Mission Control listening on port ${PORT}`);
 });
