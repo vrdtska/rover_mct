@@ -18,6 +18,7 @@
 
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const ws = new WebSocket(`${wsProtocol}//${window.location.host}`);
+
         const listeners = {};
 
         socket.onmessage = function (event) {
