@@ -76,6 +76,12 @@
             "key": "rpm_m_der2",
             "units": "RPM",
             "type": "float"
+        },
+        {
+            "name": "Mapa 2D de Navegación",
+            "key": "rover_trajectory",
+            "type": "rover.view.trajectory",
+            "location": "rover.taxonomy:rover"
         }
     ]
 }

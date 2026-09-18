@@ -21,7 +21,7 @@
 
         const listeners = {};
 
-        socket.onmessage = function (event) {
+        ws.onmessage = function (event) {
             const packet = JSON.parse(event.data);
             if (listeners[packet.id]) {
                 listeners[packet.id]({
@@ -116,6 +116,131 @@
                                 key: m.key
                             };
                         });
+                    }
+                });
+
+                // 1. Declarar el tipo personalizado
+                openmct.types.addType('rover.view.trajectory', {
+                    name: 'Trayectoria 2D Rover',
+                    description: 'Plano cartesiano en tiempo real para posición X vs Y',
+                    cssClass: 'icon-target'
+                });
+
+                // 2. Crear la vista personalizada con Canvas
+                openmct.views.addProvider({
+                    key: 'rover-2d-trajectory-view',
+                    name: 'Plano 2D',
+                    canView(domainObject) {
+                        return domainObject.type === 'rover.view.trajectory';
+                    },
+                    view(domainObject) {
+                        let unsubscribeX, unsubscribeY, unsubscribeTheta;
+                        let posX = 0, posY = 0, theta = 0;
+                        const trail = [];
+                        const maxPoints = 500;
+
+                        return {
+                            show(container) {
+                                container.innerHTML = `
+                                    <div style="width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#1e1e1e;">
+                                        <canvas id="roverCanvas" width="600" height="600" style="background:#111; border:1px solid #333;"></canvas>
+                                        <div id="coordsInfo" style="color:#aaa; font-family:monospace; margin-top:8px;">
+                                            X: 0.00 m | Y: 0.00 m | θ: 0.00 rad
+                                        </div>
+                                    </div>
+                                `;
+
+                                const canvas = container.querySelector('#roverCanvas');
+                                const ctx = canvas.getContext('2d');
+                                const coordsDiv = container.querySelector('#coordsInfo');
+
+                                const scale = 30; // 30 px equivalen a 1 metro
+                                const originX = canvas.width / 2;
+                                const originY = canvas.height / 2;
+
+                                function render() {
+                                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                                    // Ejes cartesianos
+                                    ctx.strokeStyle = '#2d3748';
+                                    ctx.lineWidth = 1;
+                                    ctx.beginPath();
+                                    ctx.moveTo(0, originY); ctx.lineTo(canvas.width, originY);
+                                    ctx.moveTo(originX, 0); ctx.lineTo(originX, canvas.height);
+                                    ctx.stroke();
+
+                                    // Dibujar rastro (trayectoria histórica)
+                                    if (trail.length > 1) {
+                                        ctx.strokeStyle = '#38bdf8';
+                                        ctx.lineWidth = 2;
+                                        ctx.beginPath();
+                                        trail.forEach((pt, i) => {
+                                            const cx = originX + pt.x * scale;
+                                            const cy = originY - pt.y * scale; // Invertir Y para coordenadas cartesianas
+                                            if (i === 0) ctx.moveTo(cx, cy);
+                                            else ctx.lineTo(cx, cy);
+                                        });
+                                        ctx.stroke();
+                                    }
+
+                                    // Dibujar Rover actual
+                                    const currentCx = originX + posX * scale;
+                                    const currentCy = originY - posY * scale;
+
+                                    ctx.save();
+                                    ctx.translate(currentCx, currentCy);
+                                    ctx.rotate(-theta); // Rotación en sentido antihorario
+
+                                    // Cuerpo del rover
+                                    ctx.fillStyle = '#ef4444';
+                                    ctx.beginPath();
+                                    ctx.arc(0, 0, 8, 0, 2 * Math.PI);
+                                    ctx.fill();
+
+                                    // Flecha indicadora de orientación
+                                    ctx.strokeStyle = '#facc15';
+                                    ctx.lineWidth = 3;
+                                    ctx.beginPath();
+                                    ctx.moveTo(0, 0);
+                                    ctx.lineTo(16, 0);
+                                    ctx.stroke();
+                                    ctx.restore();
+
+                                    coordsDiv.innerText = `X: ${posX.toFixed(2)} m | Y: ${posY.toFixed(2)} m | θ: ${theta.toFixed(2)} rad`;
+                                }
+
+                                // Suscripciones a los puntos de telemetría emitidos por server.js
+                                openmct.objects.get('rover.taxonomy:pos_x').then(obj => {
+                                    unsubscribeX = openmct.telemetry.subscribe(obj, datum => {
+                                        posX = datum.value;
+                                        trail.push({ x: posX, y: posY });
+                                        if (trail.length > maxPoints) trail.shift();
+                                        render();
+                                    });
+                                });
+
+                                openmct.objects.get('rover.taxonomy:pos_y').then(obj => {
+                                    unsubscribeY = openmct.telemetry.subscribe(obj, datum => {
+                                        posY = datum.value;
+                                        render();
+                                    });
+                                });
+
+                                openmct.objects.get('rover.taxonomy:pos_theta').then(obj => {
+                                    unsubscribeTheta = openmct.telemetry.subscribe(obj, datum => {
+                                        theta = datum.value;
+                                        render();
+                                    });
+                                });
+
+                                render();
+                            },
+                            destroy() {
+                                if (unsubscribeX) unsubscribeX();
+                                if (unsubscribeY) unsubscribeY();
+                                if (unsubscribeTheta) unsubscribeTheta();
+                            }
+                        };
                     }
                 });
 
